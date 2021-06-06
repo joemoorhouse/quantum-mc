@@ -37,35 +37,61 @@ class TestArithmetic(QiskitTestCase):
     def in_progress_test_piecewise_transform(self):
         """Simple end-to-end test of the (semi-classical) multiply and add building block."""
 
+        import numpy as np
+        import matplotlib.pyplot as plt
+
+        from qiskit import execute, Aer, QuantumCircuit, QuantumRegister, ClassicalRegister, AncillaRegister
+        from qiskit.aqua.algorithms import IterativeAmplitudeEstimation
+        from qiskit.circuit.library import NormalDistribution, LogNormalDistribution, LinearAmplitudeFunction, IntegerComparator, WeightedAdder
+        from qiskit.visualization import plot_histogram
+        from quantum_mc.arithmetic import multiply_add 
+
         qr_input = QuantumRegister(3, 'input')
-        qr_result = QuantumRegister(5, 'result')
-        qr_ancilla = QuantumRegister(5, 'ancilla')
-        output = ClassicalRegister(5, 'output')
-        circ = QuantumCircuit(qr_input, qr_result, qr_ancilla, output) 
+        qr_result = QuantumRegister(6, 'result')
+        qr_comp = QuantumRegister(2, 'comparisons')
+        qr_ancilla = QuantumRegister(6, 'ancilla')
+        qr_comp_anc = QuantumRegister(3, 'cond_ancilla')
+        output = ClassicalRegister(6, 'output')
+        circ = QuantumCircuit(qr_input, qr_result, qr_comp, qr_ancilla, qr_comp_anc, output) 
 
-        circ.x(qr_input[0])
-        circ.x(qr_input[1])
-        circ.x(qr_input[2]) # i.e. load up 7 into register
+        # our test piece-wise transforms:
+        # trans0 if x <= 2, x => 6*x + 7
+        # trans1 if 2 < x <= 5, x => x + 17 
+        # trans2 if x > 5, x => 3*x + 7
 
-        #p1 x <= 2
-        # 6*x + 7
+        sigma = 1
+        low = -3
+        high = 3
+        mu = 0
 
-        #p2 2 < x <= 5
-        # x + 17 
+        normal = NormalDistribution(3, mu=mu, sigma=sigma**2, bounds=(low, high))
+        circ.append(normal, qr_input)
 
-        #p2 x > 5
-        # 3*x + 7
+        comp0 = IntegerComparator(num_state_qubits=3, value=3, name = "comparator0") # true if i >= point
+        comp1 = IntegerComparator(num_state_qubits=3, value=6, name = "comparator1") # true if i >= point
+        trans0 = multiply_add.cond_classical_add_mult(6, 7, qr_input, qr_result, qr_ancilla) 
+        trans1 = multiply_add.cond_classical_add_mult(1, 17, qr_input, qr_result, qr_ancilla) 
+        trans2 = multiply_add.cond_classical_add_mult(3, 7, qr_input, qr_result, qr_ancilla)  
 
-        comp0 = IntegerComparator(num_state_qubits=3, value=3, name = "comparator") # if true if i >= point
-        comp1 = IntegerComparator(num_state_qubits=3, value=6, name = "comparator") # if true if i >= point
+        circ.append(comp0, qr_input[:] + [qr_comp[0]] + qr_ancilla[0:comp0.num_ancillas])
+        circ.append(comp1, qr_input[:] + [qr_comp[1]] + qr_ancilla[0:comp0.num_ancillas])
 
-        qr_cond = QuantumRegister(3, 'ancilla')
+        # use three additional ancillas to define the ranges
+        circ.cx(qr_comp[0], qr_comp_anc[0])
+        circ.x(qr_comp_anc[0])
+        circ.cx(qr_comp[1], qr_comp_anc[2])
+        circ.x(qr_comp_anc[2])
+        circ.ccx(qr_comp[0], qr_comp_anc[2], qr_comp_anc[1])
 
-        circ.append(comp0, qr_result[:] + qr_cond[0] + qr_ancilla[0:comp0.num_ancilla_qubits])
-        circ.append(comp1, qr_result[:] + qr_cond[0] + qr_ancilla[0:comp0.num_ancilla_qubits])
+        circ.append(trans0, [qr_comp_anc[0]] + qr_input[:] + qr_result[:] + qr_ancilla[:])
+        circ.append(trans1, [qr_comp_anc[1]] + qr_input[:] + qr_result[:] + qr_ancilla[:])
+        circ.append(trans2, [qr_comp[1]] + qr_input[:] + qr_result[:] + qr_ancilla[:])
 
-        trans2 = multiply_add.cond_classical_add_mult(3, 7, qr_input, qr_result, qr_ancilla)   
-        circ.append(trans2, comp1[:] + qr_input[:] + qr_result[:] + qr_ancilla[:])
+        # can uncompute qr_comp_anc
+        # then uncompute the comparators 
+
+        circ.measure(qr_result, output)
+
 
 
         
