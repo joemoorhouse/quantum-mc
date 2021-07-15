@@ -42,3 +42,5 @@ conf_int = np.array(result_cdf['confidence_interval'])
 print('Exact value:    \t%.4f' % exact_value)
 print('Estimated value:\t%.4f' % result_cdf['estimation'])
 print('Confidence interval: \t[%.4f, %.4f]' % tuple(conf_int))
+
+def transform_from_

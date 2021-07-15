@@ -9,7 +9,6 @@ from qiskit.circuit import QuantumCircuit
 from qiskit.circuit.library import UniformDistribution, NormalDistribution, LogNormalDistribution
 from qiskit.quantum_info import Statevector
 from quantum_mc.probability_distributions.gaussian_copula import GaussianCopula 
-from quantum_mc.arithmetic.multiply_add import multiply_add
 
 class TestGaussianCopulaDistribution(QiskitTestCase):
 

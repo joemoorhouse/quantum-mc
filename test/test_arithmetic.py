@@ -1,6 +1,8 @@
+from quantum_mc.arithmetic.piecewise_linear_transform import PiecewiseLinearTransform3
 import unittest
 
 import numpy as np
+from qiskit.circuit.library.arithmetic import weighted_adder
 from scipy.stats import multivariate_normal, norm
 
 from qiskit.test.base import QiskitTestCase
@@ -33,6 +35,42 @@ class TestArithmetic(QiskitTestCase):
         # 7 * 2 + 3 = 17: expect 10001
         counts = execute(circ, Aer.get_backend('qasm_simulator'), shots = 128).result().get_counts()
         np.testing.assert_equal(counts['10001'], 128) 
+
+    def test_piecewise_transform(self):
+        import numpy as np
+        import matplotlib.pyplot as plt
+
+        from qiskit import execute, Aer, QuantumCircuit, QuantumRegister, ClassicalRegister, AncillaRegister
+        from qiskit.aqua.algorithms import IterativeAmplitudeEstimation
+        from qiskit.circuit.library import NormalDistribution, LogNormalDistribution, LinearAmplitudeFunction, IntegerComparator, WeightedAdder
+        from qiskit.visualization import plot_histogram
+        from quantum_mc.arithmetic import piecewise_linear_transform
+
+        sigma = 1
+        low = -3
+        high = 3
+        mu = 0
+
+        normal = NormalDistribution(3, mu=mu, sigma=sigma**2, bounds=(low, high))
+        
+        # our test piece-wise transforms:
+        # trans0 if x <= 2, x => 6*x + 7
+        # trans1 if 2 < x <= 5, x => x + 17 
+        # trans2 if x > 5, x => 3*x + 7
+        trans = PiecewiseLinearTransform3(2, 5, 6, 1, 3, 7, 17, 7)
+        num_ancillas = trans.num_ancilla_qubits
+
+        qr_input = QuantumRegister(3, 'input')
+        qr_result = QuantumRegister(6, 'result')
+        qr_ancilla = QuantumRegister(num_ancillas, 'ancilla')
+        output = ClassicalRegister(6, 'output')
+        
+        circ = QuantumCircuit(qr_input, qr_result, qr_ancilla, output) 
+        circ.append(normal, qr_input)
+        circ.append(trans, qr_input + qr_result + qr_ancilla)
+
+        circ.measure(qr_result, output)
+
 
     def in_progress_test_piecewise_transform(self):
         """Simple end-to-end test of the (semi-classical) multiply and add building block."""

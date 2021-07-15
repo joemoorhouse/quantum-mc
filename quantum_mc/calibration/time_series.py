@@ -1,3 +1,4 @@
+import os
 import requests as req
 import pandas as pd
 from pandas.tseries.offsets import BDay
@@ -9,7 +10,10 @@ def source(ticker):
     res = req.get('https://uk.finance.yahoo.com/quote/MSFT/history?period1=1490918400&period2=1617235200&interval=1d&filter=history&frequency=1d&includeAdjustedClose=true', verify=False) #, proxies=proxies)
 
 def get_data(ticker):
-    data = pd.read_csv("data/" + ticker + ".csv")
+    #data = pd.read_csv("data/" + ticker + ".csv")
+    dir = os.path.dirname(os.path.realpath(__file__))
+    data = pd.read_csv(os.path.join(dir, "..", "..", "examples", "data", ticker + ".csv"))
+    #data = pd.read_csv(os.path.join(os.getcwd(), "examples", "data", ticker + ".csv"))
     data["Date"] = pd.to_datetime(data["Date"], format="%Y-%m-%d") 
     data.set_index("Date", inplace=True)
     return data
