@@ -5,14 +5,14 @@ import numpy as np
 from qiskit.test.base import QiskitTestCase
 import quantum_mc.calibration.fitting as ft
 import quantum_mc.calibration.time_series as ts
-from qiskit.circuit.library.arithmetic import weighted_adder
 from scipy.stats import multivariate_normal, norm
 from qiskit.test.base import QiskitTestCase
 from qiskit import execute, Aer, QuantumCircuit, QuantumRegister, ClassicalRegister, AncillaRegister
-from qiskit.circuit.library import UniformDistribution, NormalDistribution, LogNormalDistribution
+from qiskit.circuit.library import NormalDistribution
 from qiskit.quantum_info import Statevector
-import quantum_mc.arithmetic.multiply_add as multiply_add
-from qiskit.circuit.library import NormalDistribution, LogNormalDistribution, LinearAmplitudeFunction, IntegerComparator, WeightedAdder
+from qiskit.circuit.library import NormalDistribution, LogNormalDistribution, IntegerComparator
+from qiskit.utils import QuantumInstance
+from qiskit.algorithms import IterativeAmplitudeEstimation, EstimationProblem
 
 class TestMcVar(QiskitTestCase):
 
@@ -26,8 +26,10 @@ class TestMcVar(QiskitTestCase):
         bounds = [(-3, 3), (-3, 3)] 
         mu = [0, 0]
 
+        # starting point is a multi-variate normal distribution
         normal = NormalDistribution(num_qubits, mu=mu, sigma=sigma, bounds=bounds)
 
+        # we apply piecewise transforms to obtain the as-calibrated distributions
         transforms = []
         for ticker in ["MSFT", "AAPL"]:
             ((cdf_x, cdf_y), sigma) = ft.get_cdf_data(ticker)
@@ -39,15 +41,55 @@ class TestMcVar(QiskitTestCase):
         num_ancillas = transforms[0].num_ancilla_qubits
 
         qr_input = QuantumRegister(6, 'input') # 2 times 3 registers
+        qr_objective = QuantumRegister(1, 'objective')
         qr_result = QuantumRegister(6, 'result')
         qr_ancilla = QuantumRegister(num_ancillas, 'ancilla')
-        output = ClassicalRegister(6, 'output')
+        #output = ClassicalRegister(6, 'output')
         
-        circ = QuantumCircuit(qr_input, qr_result, qr_ancilla, output) 
-        circ.append(normal, qr_input)
+        state_preparation = QuantumCircuit(qr_input, qr_objective, qr_result, qr_ancilla) #, output) 
+        state_preparation.append(normal, qr_input)
 
         for i in range(2):
             offset = i * 3
-            circ.append(transforms[i], qr_input[offset:offset + 3] + qr_result[:] + qr_ancilla[:])
+            state_preparation.append(transforms[i], qr_input[offset:offset + 3] + qr_result[:] + qr_ancilla[:])
         
-        circ.draw()
+        # to calculate the cdf, we use an additional comparator
+        x_eval = 4
+        comparator = IntegerComparator(len(qr_result), x_eval + 1, geq=False)
+        state_preparation.append(comparator, qr_result[:] + qr_objective[:] + qr_ancilla[0:comparator.num_ancillas])
+        
+        # now check
+        check = False
+        if check:
+            job = execute(state_preparation, backend=Aer.get_backend('statevector_simulator'))
+            var_prob = 0
+            for i, a in enumerate(job.result().get_statevector()):
+                b = ('{0:0%sb}' % (len(qr_input) + 1)).format(i)[-(len(qr_input) + 1):]
+                prob = np.abs(a)**2
+                if prob > 1e-6 and b[0] == '1':
+                    var_prob += prob
+            print('Operator CDF(%s)' % x_eval + ' = %.4f' % var_prob)
+
+        # now do AE
+
+        problem = EstimationProblem(state_preparation=state_preparation,
+                            objective_qubits=[len(qr_input)])
+
+        # target precision and confidence level
+        epsilon = 0.01
+        alpha = 0.05
+        qi = QuantumInstance(Aer.get_backend('aer_simulator'), shots=100)
+        ae_cdf = IterativeAmplitudeEstimation(epsilon, alpha=alpha, quantum_instance=qi)
+        result_cdf = ae_cdf.estimate(problem)
+
+        
+        conf_int = np.array(result_cdf.confidence_interval)
+        print('Estimated value:\t%.4f' % result_cdf.estimation)
+        print('Confidence interval: \t[%.4f, %.4f]' % tuple(conf_int))
+
+        state_preparation.draw()
+
+    #def test_amplitude_estimation(self):
+        
+
+        #problem - EstimationProblem()
