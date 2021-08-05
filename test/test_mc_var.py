@@ -14,8 +14,28 @@ from qiskit.circuit.library import NormalDistribution, LogNormalDistribution, In
 from qiskit.utils import QuantumInstance
 from qiskit.algorithms import IterativeAmplitudeEstimation, EstimationProblem
 
-class TestMcVar(QiskitTestCase):
+def get_sims(normal_distribution):
+    import numpy as np
+    values = normal_distribution._values
+    probs = normal_distribution._probabilities
+    # we generate a bunch of realisation of values, based 
+    upper_bounds = [0.0]
+    stop = 0.0
+    for val, prob in zip(values, probs):
+        stop += prob
+        upper_bounds.append(stop)
+    
+    r = np.random.uniform(low=0.0, high=1.0, size=10)
+    indices = np.searchsorted(upper_bounds, r, side='left', sorter=None) - 1
 
+    g1, g2 = np.meshgrid(range(2**3), range(2**3), indexing="ij",)
+    i1 = g1.flatten()[indices]
+    i2 = g2.flatten()[indices]
+    #x = list(zip(*(grid.flatten() for grid in meshgrid)))
+    return i1, i2
+
+class TestMcVar(QiskitTestCase):
+    
     def test_distribution_load(self):
         """Simple end-to-end test of the (semi-classical) multiply and add building block."""
 
@@ -29,14 +49,22 @@ class TestMcVar(QiskitTestCase):
         # starting point is a multi-variate normal distribution
         normal = NormalDistribution(num_qubits, mu=mu, sigma=sigma, bounds=bounds)
 
+    
         # we apply piecewise transforms to obtain the as-calibrated distributions
         transforms = []
+        i_to_js = []
         for ticker in ["MSFT", "AAPL"]:
             ((cdf_x, cdf_y), sigma) = ft.get_cdf_data(ticker)
             (x, y) = ft.get_fit_data(ticker, norm_to_rel = False)
             (pl, coeffs) = ft.fit_piecewise_linear(x, y)
             (i_0, i_1, a0, a1, a2, b0, b1, b2, i_to_j, i_to_x, j_to_y) = ft.convert_to_integer(pl, coeffs)
             transforms.append(PiecewiseLinearTransform3(i_0, i_1, a0, a1, a2, b0, b1, b2))
+            i_to_js.append(np.vectorize(i_to_j))
+
+        i1, i2 = get_sims(normal)
+        j1 = i_to_js[i1]
+        j2 = i_to_js[i2]
+        j_tot = j1 + j2
 
         num_ancillas = transforms[0].num_ancilla_qubits
 
@@ -88,6 +116,10 @@ class TestMcVar(QiskitTestCase):
         print('Confidence interval: \t[%.4f, %.4f]' % tuple(conf_int))
 
         state_preparation.draw()
+
+        
+
+
 
     #def test_amplitude_estimation(self):
         

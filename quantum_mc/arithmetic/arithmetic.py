@@ -203,6 +203,37 @@ def add_ripple_in_place(circ, a, b, anc, n):
         sum(circ, anc[i], a[i], b[i])
 
 # Adder that takes |a>|b> to |a>|a+b>.
+# |a> has length <= n. |a> will be padded with zeros to length n
+# |b> has length n+1.
+# Based on Vedral, Barenco, and Ekert (1996).
+def add_ripple_in_place_padding(circ, a, b, anc, n):
+
+    # Calculate all the carries except the last one.
+    for i in range(0, n - 1):
+        if i < len(a): 
+            carry(circ, anc[i], a[i], b[i], anc[i+1])
+        else: # pad with zeros
+            carry_cq(circ, anc[i], 0, b[i], anc[i+1])
+
+    # The last carry bit is the leftmost bit of the sum.
+    if (n-1) < len(a):
+        carry(circ, anc[n-1], a[n-1], b[n-1], b[n])
+    else:
+        carry_cq(circ, anc[n-1], 0, b[n-1], b[n])
+
+    # Calculate the second-to-leftmost bit of the sum.
+    circ.cx(anc[n-1],b[n-1])
+
+    # Invert the carries and calculate the remaining sums.
+    for i in range(n-2,-1,-1):
+        if i < len(a):
+            carry_dg(circ, anc[i], a[i], b[i], anc[i+1])
+            sum(circ, anc[i], a[i], b[i])
+        else:
+            carry_dg_cq(circ, anc[i], 0, b[i], anc[i+1])
+            sum_cq(circ, anc[i], 0, b[i])
+
+# Adder that takes |a>|b> to |a>|a+b>.
 # |a> has length n *and is classical*.
 # |b> has length n+1.
 # Based on Vedral, Barenco, and Ekert (1996).

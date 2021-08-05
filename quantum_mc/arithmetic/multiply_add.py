@@ -1,7 +1,7 @@
 from math import pi
 from qiskit import QuantumRegister, QuantumCircuit, AncillaRegister
 from .qft import qft, iqft, cqft, ciqft, ccu1
-from .arithmetic import cadd, full_qr, add_ripple_in_place, add_ripple_in_place_cq
+from .arithmetic import cadd, full_qr, add_ripple_in_place, add_ripple_in_place_padding, add_ripple_in_place_cq
 
 def classical_add_mult(circ, a, b, qr_in, qr_res, qr_anc):
     """qr_res = qr_res + a * qr_in + b where a and b are integers"""
@@ -15,9 +15,11 @@ def classical_mult(circ, a, qr_in, qr_res, qr_anc):
     l_a = _to_bool_list(a)
     na = len(l_a)
     nin = len(qr_in)
+    nres = len(qr_res)
     for i in range (0, na):
         if l_a[i] == 1:
-            add_ripple_in_place(circ, qr_in, _sub_qr(qr_res, i, nin + i), qr_anc, nin)
+            add_ripple_in_place_padding(circ, qr_in, _sub_qr(qr_res, i, nres - 1), qr_anc, nres - 1 - i)
+            #add_ripple_in_place(circ, qr_in, _sub_qr(qr_res, i, nin + i), qr_anc, nin)
 
 
 def cond_classical_add_mult(a, b, qr_in, qr_res, qr_anc):
@@ -34,11 +36,16 @@ def cond_classical_add_mult(a, b, qr_in, qr_res, qr_anc):
 def classical_add(circ, a, qr_b, qr_anc):
     """qr_b = a + qr_b where a is an integer and qr_b is a quantum register """
     nb = len(qr_b)
-    l_a = _to_bool_list(a)
-    if len(l_a) > nb - 1:
-        raise Exception("number of classical integer bits cannot exceed number of register qubits - 1")
-    l_a = l_a + [0 for i in range(nb - len(l_a))] # pad with zerp
+    if a >= 0:
+        l_a = _to_bool_list(a)
+        if len(l_a) > nb - 1:
+            raise Exception("number of classical integer bits cannot exceed number of register qubits - 1")
+    else: 
+        l_a = _to_bool_list(twos_comp(a, nb))
+    l_a = l_a + [0 for i in range(nb - len(l_a))] # pad with zeros
     add_ripple_in_place_cq(circ, l_a, qr_b, qr_anc, nb - 1)
+    if a < 0:
+        circ.x(qr_b[nb - 1])
 
 def _to_bool_list(a):
     s = a
@@ -48,8 +55,8 @@ def _to_bool_list(a):
         s = s >> 1
     return res
 
-# Take a subset of a quantum register from index x to y, inclusive.
 def _sub_qr(qr, x, y): 
+    """ Take a subset of a quantum register from index x to y, inclusive. """
     sub = []
     for i in range (x, y + 1):
         sub = sub + [(qr[i])]
@@ -62,3 +69,9 @@ def scalar_mult_plot(control, a, b, c, anc, na, nb):
    tempCircuit = QuantumCircuit(qa, qc, qanc)
    #scalar_mult(tempCircuit, qa, b, qc, qanc, na, nb)
    return tempCircuit
+
+def twos_comp(val, bits):
+    if (val < 0):
+        return (1 << bits) - abs(val)       
+    else:
+        return val 

@@ -7,13 +7,15 @@ import quantum_mc.arithmetic.multiply_add as multiply_add
 class PiecewiseLinearTransform3(QuantumCircuit):
     def __init__(self, x0, x1, a0, a1, a2, b0, b1, b2):
         qr_input = QuantumRegister(3, 'input')
-        qr_result = QuantumRegister(6, 'result')
-        self.num_ancilla_qubits = 2 + 6 + 3
+        num_result_qubits = 7 # 7
+        qr_result = QuantumRegister(num_result_qubits, 'result')
+        
+        self.num_ancilla_qubits = 2 + num_result_qubits + 3
         qr_ancilla = QuantumRegister(self.num_ancilla_qubits, 'ancilla')
 
         qr_comp_anc = qr_ancilla[0:2]
-        qr_arith_anc = qr_ancilla[2:8]
-        qr_range_anc = qr_ancilla[8:11]
+        qr_arith_anc = qr_ancilla[2:2 + num_result_qubits]
+        qr_range_anc = qr_ancilla[2 + num_result_qubits:2 + num_result_qubits + 3]
         
         super().__init__(qr_input, qr_result, qr_ancilla, name='pwise_lin_trans')
 
