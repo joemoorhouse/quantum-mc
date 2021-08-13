@@ -36,20 +36,20 @@ def fit_piecewise_linear(x, y):
     from scipy import optimize
     import math
 
-    def piecewise_linear3(x, x0, y0, rdx0, k0, k1, k2):
-        dx0 = rdx0 * rdx0 # use square root of delta as a parameter to keep dx0 > 0
+    def piecewise_linear3_mod(x, x0, y0, rdx0, k0, k1, k2):
+        dx0 = rdx0 * rdx0 # use square root of delta as a parameter to keep dx0 > 0 in this modified form
         x1 = x0 + dx0
         y1 = y0 + k1 * dx0 
         return np.piecewise(x, [x < x0, (x >= x0) & (x < x1), x >= x1], [lambda x:k0 * x + y0 - k0 * x0, lambda x:k1 * x + y0 - k1 * x0, lambda x:k2 * x + y1 - k2 * x1])
 
-    p, *_ = optimize.curve_fit(piecewise_linear3, x, y) 
+    p, *_ = optimize.curve_fit(piecewise_linear3_mod, x, y) 
 
     (x0, y0, rdx0, k0, k1, k2) = p
     dx0 = rdx0 * rdx0
     x1 = x0 + dx0
     coeffs = (x0, y0, x1, k0, k1, k2)
 
-    return (lambda z : piecewise_linear3(z, *p), coeffs)
+    return (lambda z : piecewise_linear3_mod(z, *p), coeffs)
 
 def fit_piecewise_cubic(x, y):
     """ Fit to piecewise cubic splines, mainly to demonstrate that if we want a smooth CDF and PDF we can get one 
@@ -60,9 +60,19 @@ def fit_piecewise_cubic(x, y):
     return lambda z : scipy.interpolate.splev(z, coeffs)
 
 
-def convert_to_integer(trans, coeffs, x_min = -4.0, x_max = 4.0, y_min = None, y_max = None):
-    """ Possible way to convert from float to integer arithmetic """
-    
+def scaled_coeffs(coeffs, scaling_factor):
+    (x0, y0, x1, k0, k1, k2) = coeffs
+    return (x0, y0 * scaling_factor, x1, k0 * scaling_factor, k1 * scaling_factor, k2 * scaling_factor)
+
+def piecewise_linear(x, x0, y0, x1, k0, k1, k2):
+    y1 = y0 + k1 * (x1 - x0) 
+    return np.piecewise(x, [x < x0, (x >= x0) & (x < x1), x >= x1], [lambda x:k0 * x + y0 - k0 * x0, lambda x:k1 * x + y0 - k1 * x0, lambda x:k2 * x + y1 - k2 * x1])
+
+def integer_piecewise_linear_coeffs(coeffs, x_min = -4.0, x_max = 4.0, y_min = None, y_max = None):
+    """ Possible way to convert piecewise linear fit from float to integer arithmetic 
+    """
+    trans = lambda z : piecewise_linear(z, *coeffs)
+
     (x0, y0, x1, k0, k1, k2) = coeffs
 
     nbits1 = 3 # number of qubits for normal distribution 
@@ -99,7 +109,7 @@ def convert_to_integer(trans, coeffs, x_min = -4.0, x_max = 4.0, y_min = None, y
     a0 = grad(k0)
     a1 = grad(k1)
     a2 = grad(k2)
-    j_0 = y_to_j(y0)
+    j_0 = y_to_j(trans(i_to_x(i_0))) # y0
     j_1 = a1 * (i_1 - i_0) + j_0
     b0 = j_0 - a0 * i_0
     b1 = j_1 - a1 * i_1

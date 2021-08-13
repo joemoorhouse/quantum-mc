@@ -14,6 +14,48 @@ from qiskit.circuit.library import NormalDistribution, LogNormalDistribution, Li
 
 class TestArithmetic(QiskitTestCase):
 
+    def test_replicate_bug(self):
+        import numpy as np
+        import matplotlib.pyplot as plt
+
+        from qiskit import execute, Aer, QuantumCircuit, QuantumRegister, ClassicalRegister, AncillaRegister
+        from qiskit.aqua.algorithms import IterativeAmplitudeEstimation
+        from qiskit.circuit.library import NormalDistribution, LogNormalDistribution, LinearAmplitudeFunction, IntegerComparator, WeightedAdder
+        from qiskit.visualization import plot_histogram
+        from quantum_mc.arithmetic import piecewise_linear_transform
+
+
+        trans = PiecewiseLinearTransform3(3, 5, 5, 3, 4, 1, 7, 2)
+        num_ancillas = trans.num_ancilla_qubits
+
+        qr_input = QuantumRegister(3, 'input')
+        qr_result = QuantumRegister(7, 'result')
+        qr_ancilla = QuantumRegister(num_ancillas, 'ancilla')
+        output = ClassicalRegister(7, 'output')
+        
+        circ = QuantumCircuit(qr_input, qr_result, qr_ancilla, output) 
+        #circ.append(normal, qr_input)
+
+        # put 3 into input
+        circ.x(qr_input[0])
+        circ.x(qr_input[1])
+
+        # put value 30 in result
+        circ.x(qr_result[1])
+        circ.x(qr_result[2])
+        circ.x(qr_result[3])
+        circ.x(qr_result[4])
+
+        #circ.append(trans, qr_input[:] + qr_result[:] + qr_ancilla[:])
+        #multiply_add.classical_add_mult(circ, 3, 7, qr_input, qr_result, qr_ancilla)
+
+        multiply_add.classical_mult(circ, 3, qr_input, qr_result, qr_ancilla)
+
+        circ.measure(qr_result, output)
+
+        counts = execute(circ, Aer.get_backend('qasm_simulator'), shots = 128).result().get_counts()
+        np.testing.assert_equal(counts['01011'], 128) 
+    
     def test_adder(self):
         """Simple end-to-end test of the (semi-classical) multiply and add building block."""
 
@@ -36,6 +78,28 @@ class TestArithmetic(QiskitTestCase):
         counts = execute(circ, Aer.get_backend('qasm_simulator'), shots = 128).result().get_counts()
         np.testing.assert_equal(counts['10001'], 128) 
 
+    def test_adder_subtract(self):
+        """Simple end-to-end test of the (semi-classical) multiply and add building block."""
+
+        qr_input = QuantumRegister(3, 'input')
+        qr_result = QuantumRegister(5, 'result')
+        qr_ancilla = QuantumRegister(5, 'ancilla')
+        output = ClassicalRegister(5, 'output')
+        circ = QuantumCircuit(qr_input, qr_result, qr_ancilla, output) 
+
+        circ.x(qr_input[0])
+        circ.x(qr_input[1])
+        circ.x(qr_input[2]) # i.e. load up 7 into register
+
+        add_mult = multiply_add.classical_add_mult(circ, 2, -3, qr_input, qr_result, qr_ancilla)
+        #circ.append(cond_add_mult, qr_input[:] + qr_result[:] + qr_ancilla[:]) for the conditional form
+        
+        circ.measure(qr_result, output)
+
+        # 7 * 2 - 3 = 11: expect 01011
+        counts = execute(circ, Aer.get_backend('qasm_simulator'), shots = 128).result().get_counts()
+        np.testing.assert_equal(counts['01011'], 128) 
+
     def test_piecewise_transform(self):
         import numpy as np
         import matplotlib.pyplot as plt
@@ -51,7 +115,7 @@ class TestArithmetic(QiskitTestCase):
         high = 3
         mu = 0
 
-        normal = NormalDistribution(3, mu=mu, sigma=sigma**2, bounds=(low, high))
+        #normal = NormalDistribution(3, mu=mu, sigma=sigma**2, bounds=(low, high))
         
         # our test piece-wise transforms:
         # trans0 if x <= 2, x => 6*x + 7
@@ -66,10 +130,14 @@ class TestArithmetic(QiskitTestCase):
         output = ClassicalRegister(6, 'output')
         
         circ = QuantumCircuit(qr_input, qr_result, qr_ancilla, output) 
-        circ.append(normal, qr_input)
+        #circ.append(normal, qr_input)
+
         circ.append(trans, qr_input + qr_result + qr_ancilla)
 
         circ.measure(qr_result, output)
+
+        counts = execute(circ, Aer.get_backend('qasm_simulator'), shots = 128).result().get_counts()
+        np.testing.assert_equal(counts['01011'], 128) 
 
 
     def in_progress_test_piecewise_transform(self):

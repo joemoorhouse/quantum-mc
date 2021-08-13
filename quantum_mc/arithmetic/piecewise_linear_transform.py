@@ -7,7 +7,7 @@ import quantum_mc.arithmetic.multiply_add as multiply_add
 class PiecewiseLinearTransform3(QuantumCircuit):
     def __init__(self, x0, x1, a0, a1, a2, b0, b1, b2):
         qr_input = QuantumRegister(3, 'input')
-        num_result_qubits = 7 # 7
+        num_result_qubits = 6 # 7
         qr_result = QuantumRegister(num_result_qubits, 'result')
         
         self.num_ancilla_qubits = 2 + num_result_qubits + 3

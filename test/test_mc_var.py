@@ -37,33 +37,45 @@ def get_sims(normal_distribution):
 class TestMcVar(QiskitTestCase):
     
     def test_distribution_load(self):
-        """Simple end-to-end test of the (semi-classical) multiply and add building block."""
+        """ Test that calculates a cumulative probability from the P&L distribution."""
 
         correl = ft.get_correl("AAPL", "MSFT")
         
+        bounds_std = 3.0
         num_qubits = [3, 3]        
         sigma = correl**2
-        bounds = [(-3, 3), (-3, 3)] 
+        bounds = [(-bounds_std, bounds_std), (-bounds_std, bounds_std)] 
         mu = [0, 0]
 
         # starting point is a multi-variate normal distribution
         normal = NormalDistribution(num_qubits, mu=mu, sigma=sigma, bounds=bounds)
 
-    
-        # we apply piecewise transforms to obtain the as-calibrated distributions
-        transforms = []
-        i_to_js = []
+        pl_set = []
+        coeff_set = []
         for ticker in ["MSFT", "AAPL"]:
             ((cdf_x, cdf_y), sigma) = ft.get_cdf_data(ticker)
             (x, y) = ft.get_fit_data(ticker, norm_to_rel = False)
             (pl, coeffs) = ft.fit_piecewise_linear(x, y)
-            (i_0, i_1, a0, a1, a2, b0, b1, b2, i_to_j, i_to_x, j_to_y) = ft.convert_to_integer(pl, coeffs)
+            # scale, to apply an arbitrary delta (we happen to use the same value here, but could be different)
+            coeffs = ft.scaled_coeffs(coeffs, 1.2)
+            pl_set.append(lambda z : ft.piecewise_linear(z, *coeffs))
+            coeff_set.append(coeffs)
+    
+        # calculate the max and min P&Ls
+        p_max = max(pl_set[0](bounds_std), pl_set[1](bounds_std))
+        p_min = min(pl_set[0](-bounds_std), pl_set[1](-bounds_std))
+
+        # we discretise the transforms and create the circuits
+        transforms = []
+        i_to_js = []
+        for i,ticker in enumerate(["MSFT", "AAPL"]):
+            (i_0, i_1, a0, a1, a2, b0, b1, b2, i_to_j, i_to_x, j_to_y) = ft.integer_piecewise_linear_coeffs(coeff_set[i], x_min = -bounds_std, x_max = bounds_std, y_min = p_min, y_max = p_max)
             transforms.append(PiecewiseLinearTransform3(i_0, i_1, a0, a1, a2, b0, b1, b2))
             i_to_js.append(np.vectorize(i_to_j))
 
         i1, i2 = get_sims(normal)
-        j1 = i_to_js[i1]
-        j2 = i_to_js[i2]
+        j1 = i_to_js[0](i1)
+        j2 = i_to_js[1](i2)
         j_tot = j1 + j2
 
         num_ancillas = transforms[0].num_ancilla_qubits
@@ -109,19 +121,9 @@ class TestMcVar(QiskitTestCase):
         qi = QuantumInstance(Aer.get_backend('aer_simulator'), shots=100)
         ae_cdf = IterativeAmplitudeEstimation(epsilon, alpha=alpha, quantum_instance=qi)
         result_cdf = ae_cdf.estimate(problem)
-
-        
+  
         conf_int = np.array(result_cdf.confidence_interval)
         print('Estimated value:\t%.4f' % result_cdf.estimation)
         print('Confidence interval: \t[%.4f, %.4f]' % tuple(conf_int))
 
         state_preparation.draw()
-
-        
-
-
-
-    #def test_amplitude_estimation(self):
-        
-
-        #problem - EstimationProblem()
