@@ -43,7 +43,7 @@ class TestMcVar(QiskitTestCase):
         
         bounds_std = 3.0
         num_qubits = [3, 3]        
-        sigma = correl**2
+        sigma = correl
         bounds = [(-bounds_std, bounds_std), (-bounds_std, bounds_std)] 
         mu = [0, 0]
 
