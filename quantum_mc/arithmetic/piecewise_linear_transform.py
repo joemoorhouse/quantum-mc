@@ -5,9 +5,9 @@ import quantum_mc.arithmetic.multiply_add as multiply_add
 
 
 class PiecewiseLinearTransform3(QuantumCircuit):
-    def __init__(self, x0, x1, a0, a1, a2, b0, b1, b2):
-        qr_input = QuantumRegister(3, 'input')
-        num_result_qubits = 6 # 7
+    def __init__(self, x0, x1, a0, a1, a2, b0, b1, b2, nbits = 3):
+        qr_input = QuantumRegister(nbits, 'input')
+        num_result_qubits = nbits * 2 
         qr_result = QuantumRegister(num_result_qubits, 'result')
         
         self.num_ancilla_qubits = 2 + num_result_qubits + 3
@@ -19,8 +19,8 @@ class PiecewiseLinearTransform3(QuantumCircuit):
         
         super().__init__(qr_input, qr_result, qr_ancilla, name='pwise_lin_trans')
 
-        comp0 = IntegerComparator(num_state_qubits=3, value=x0, name = "comparator0") # true if i >= point
-        comp1 = IntegerComparator(num_state_qubits=3, value=x1, name = "comparator1") # true if i >= point
+        comp0 = IntegerComparator(num_state_qubits=nbits, value=x0, name = "comparator0") # true if i >= point
+        comp1 = IntegerComparator(num_state_qubits=nbits, value=x1, name = "comparator1") # true if i >= point
         trans0 = multiply_add.cond_classical_add_mult(a0, b0, qr_input, qr_result, qr_arith_anc) 
         trans1 = multiply_add.cond_classical_add_mult(a1, b1, qr_input, qr_result, qr_arith_anc) 
         trans2 = multiply_add.cond_classical_add_mult(a2, b2, qr_input, qr_result, qr_arith_anc)  

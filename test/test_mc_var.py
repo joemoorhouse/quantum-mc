@@ -36,6 +36,31 @@ def get_sims(normal_distribution):
 
 class TestMcVar(QiskitTestCase):
     
+    def test_no_discretisation(self):
+        correl = ft.get_correl("AAPL", "MSFT")
+        
+        coeff_set = []
+        pl_set = []
+        for ticker in ["MSFT", "AAPL"]:
+            ((cdf_x, cdf_y), sigma) = ft.get_cdf_data(ticker)
+            (x, y) = ft.get_fit_data(ticker, norm_to_rel = False)
+            (pl, coeffs) = ft.fit_piecewise_linear(x, y)
+            # scale, to apply an arbitrary delta (we happen to use the same value here, but could be different)
+            coeffs = ft.scaled_coeffs(coeffs, 1.0 if ticker == "MSFT" else 1.0)
+            coeff_set.append(coeffs)
+        pl_set.append(lambda z : ft.piecewise_linear(z, *coeff_set[0]))
+        pl_set.append(lambda z : ft.piecewise_linear(z, *coeff_set[1]))
+
+        c = np.linalg.cholesky(correl)
+        r = np.random.normal(0, 1, size = (2, 10))
+        v = c@r
+
+        v1 = np.vectorize(pl_set[0])(v[0, :])
+        v2 = np.vectorize(pl_set[1])(v[1, :])
+        
+        v = v1 + v2
+
+    
     def test_distribution_load(self):
         """ Test that calculates a cumulative probability from the P&L distribution."""
 

@@ -68,15 +68,15 @@ def piecewise_linear(x, x0, y0, x1, k0, k1, k2):
     y1 = y0 + k1 * (x1 - x0) 
     return np.piecewise(x, [x < x0, (x >= x0) & (x < x1), x >= x1], [lambda x:k0 * x + y0 - k0 * x0, lambda x:k1 * x + y0 - k1 * x0, lambda x:k2 * x + y1 - k2 * x1])
 
-def integer_piecewise_linear_coeffs(coeffs, x_min = -4.0, x_max = 4.0, y_min = None, y_max = None):
+def integer_piecewise_linear_coeffs(coeffs, x_min = -4.0, x_max = 4.0, y_min = None, y_max = None, nbits_norm = 3, nbits_extra = 2):
     """ Possible way to convert piecewise linear fit from float to integer arithmetic 
     """
     trans = lambda z : piecewise_linear(z, *coeffs)
 
     (x0, y0, x1, k0, k1, k2) = coeffs
 
-    nbits1 = 3 # number of qubits for normal distribution 
-    nbits2 = 2 # number of qubits added for transform
+    nbits1 = nbits_norm # number of qubits for normal distribution 
+    nbits2 = nbits_extra # number of qubits added for transform
 
     if not y_min:
         y_min = trans(x_min)
